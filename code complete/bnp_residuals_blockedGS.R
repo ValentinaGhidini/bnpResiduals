@@ -270,3 +270,13 @@ coverage <- function(real_value, intervals){
   cover <- sum(real_value>=intervals[,1] & real_value<=intervals[,2])/length(beta_true)
   return(cover)
 }
+
+
+model_selection <- function(X, Y, sigma2, cutoff_level = 0.75){
+  n = nrow(X)
+  t_cutoff <- qt(cutoff_level, df=n-1)
+  index <- matrix(coef(lm(Y~X[,-1])), nrow=1)%*%(t(X)%*%X)/sigma2
+  selected <- index>t_cutoff
+  return(X[,selected])
+}
+
