@@ -15,16 +15,17 @@ initializer <- function(Z, p, comp, b0, B0, N, mu0, sigma0, complete_matrix){
 }
 
 
-p_sampler <- function(K,theta,N){ # distribution of the Ks - IT DOES NOT DEPEND ON THE MODEL!
-  #K = n classifications labels
-  #theta = concentration parameter
-  #Find multiplicities
-  res <- table(K) #summary of labels
-  pos <- as.numeric(names(res)) #atoms with at least one label
+p_sampler <- function(K,theta,N){ 
+  # distribution of the Ks -
+  # K = n classifications labels
+  # theta = concentration parameter
+  # Find multiplicities
+  res <- table(K) # summary of labels
+  pos <- as.numeric(names(res)) # atoms with at least one label
   M <- rep(0,N)
   M[pos] <- res
   M <- M[-N]
-  #sample betas
+  # sample betas
   V <- rbeta(length(M),shape1 = 1+M,theta+sum(M)-cumsum(M))
   W <- cumprod(1-V)
   V <- c(V,1)
@@ -80,19 +81,25 @@ sampler_triplet_blockedGS <- function(Y,epsilon, comp, p, Z, mu0, sigma0){
   N <- length(p)
   n <- length(Y)
   K=c()
-  weights_k1 <- log(p)+t(sapply(epsilon, function(x) dnorm(x, mean=Z[,1], sd=Z[,2], log=T)))
-  weights_k2 <- log(p)+t(sapply(epsilon, function(x) dnorm(x, mean=-Z[,1], sd=Z[,3], log=T)))
-  weights_k1[comp==-1,] = weights_k2[comp==-1,]
-  weights_k <- apply(t(weights_k1), 1, function(x) exp(x-logSumExp(x)))#exp(weights_k1-logSumExp(weights_k1))
-  K = apply(weights_k, MARGIN=1, function(x) sample(1:N, size=1, replace=T, prob=x))
+  #weights_k1 <- log(p)+t(sapply(epsilon, function(x) dnorm(x, mean=Z[,1], sd=Z[,2], log=T)))
+  #weights_k2 <- log(p)+t(sapply(epsilon, function(x) dnorm(x, mean=-Z[,1], sd=Z[,3], log=T)))
+  #weights_k1[comp==-1,] = weights_k2[comp==-1,]
+  #weights_k <- apply(weights_k1, 1, function(x) exp(x-logSumExp(x)))#exp(weights_k1-logSumExp(weights_k1))
+  #weights_k <- t(weights_k)
+  for (i in 1:n){
+    weights_k <- log(p)+dnorm(epsilon[i], mean=comp[i]*Z[,1], sd=ifelse(rep(comp[i],N)==1, Z[,2], Z[,3]), log=T)
+    weights_k <- exp(weights_k-logSumExp(weights_k))
+    K[i] = sample(1:N, size=1, prob = weights_k)
+  }
+  #K = apply(weights_k, MARGIN=1, function(x) sample(1:N, size=1, replace=T, prob=x))
 
   mu <- c()
   tau1 <- c()
   tau2 <- c()
   
   #Find multiplicities
-  res <- table(K) #summary of labels
-  pos <- as.numeric(names(res)) #positions of atoms with at least one label
+  res <- table(K) # summary of labels
+  pos <- as.numeric(names(res)) # positions of atoms with at least one label
   M <- rep(0,N)
   M[pos] <- res
 
@@ -131,10 +138,13 @@ sampler_triplet_blockedGS <- function(Y,epsilon, comp, p, Z, mu0, sigma0){
 }
 
 
-sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose=T, log_rate=F){
-  
+sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose=T, log_rate=T){
+  n <- nrow(X)
+  k <- ncol(X)
+  # Write on file
   null_df <- data.frame(NULL)
-  
+  Grid <- seq(-50, 50, by=.1)
+  predictive <- matrix(0, ncol=length(Grid), nrow=iter)
   write.table(null_df, file = "mu.csv", row.names = F)
   write.table(null_df, file = "tau1.csv", row.names = F)
   write.table(null_df, file = "tau2.csv", row.names = F)
@@ -142,13 +152,6 @@ sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose
   write.table(null_df, file = "betas.csv", row.names = F)
   write.table(null_df, file = "component.csv", row.names = F)
   write.table(null_df, file = "epsilon.csv", row.names = F)
-  
-  # grid to compute the predictive
-  grid <- seq(-50, 50, by=.1)
-  
-  predictive <- matrix(NA, nrow=length(grid), ncol=iter)
-  
-  
   if (thin<=0){
     thin=1
   }
@@ -156,82 +159,95 @@ sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose
   # Hyperpriors
   t=2
   T_big=4
-  
-  #sigma0 = sqrt(rinvgamma(n=1, shape = t, rate = T_big))
-  #mu0 = rtruncnorm(1, a=0, b=Inf, mean =0, sd = sigma0)
-  mu0=initializer$mu0
+
+  mu0=0 # To ensure semiconjugacy
   sigma0=initializer$sigma0
   
   pb <- progress_bar$new(total = iter)
   Z <- initializer$Z
   b0 <- initializer$b0
   B0 <- initializer$B0
-  #w <- initializer$w
-  comp = initializer$comp
+  comp <- initializer$comp
   p <- initializer$p
-  #mu0 = initializer$mu0
-  #sigma0 = initializer$sigma0
+
+  sigma0_saved <- c()
   complete_matrix = initializer$complete_matrix
-  times_beta <- c()
-  times_gamma <- c()
-  times_gs <- c()
+  # Tests
+  p0 <- c()
+  p1 <- c()
+  p0_single <- c()
+  p1_single <- c()
+  tests <- matrix(0, nrow = iter, ncol = k)
+
+  # Cluster analysis for outliers
+  clusters <- matrix(0, nrow = iter, ncol=n)
   
+
   for (j in 1:iter){
-    # print(j)
-    
     if (Verbose){
       pb$tick()
       Sys.sleep(1 /iter)}
     
-    
-    begin_beta <- Sys.time()
-    
-    
-    # Betasss
-    #if (Verbose){print("beta")}
+    # Sample beta
     ss <- sampler_beta(complete_matrix[,1], complete_matrix[,2], complete_matrix[,3], comp, Y, B0, b0)
-    end_beta <- Sys.time()
-    times_beta[j] <- end_beta - begin_beta
+    beta <- ss$beta
     
-    beta = ss$beta
-    
+    # Update Residuals 
     epsilon <- Y-X%*%beta
     
     # Gamma prob
-    begin_gamma <- Sys.time()
     w <- sampler_gamma_prob(X, Y, beta, complete_matrix[,1], complete_matrix[,2], complete_matrix[,3], log_rate = log_rate)
     
-    end_gamma <- Sys.time()
-    times_gamma[j] <- end_gamma - begin_gamma
-    #Update comp
+    #Update Gamma (comp)
     comp = apply(w,1,function(x){
       return(sample(c(1,-1), size=1, prob = x))
     })
-    
-    
-    #if (Verbose){print("Triplet - Z")}
-    # mu sampler
-    begin_gs <- Sys.time()
-    gs <- sampler_triplet_blockedGS(Y, epsilon, comp, p, Z, mu0, sigma0)
-    end_gs <- Sys.time()
-    
-    times_gs[j] = end_gs - begin_gs
-    
-    K <- gs$K
-    Z <- gs$Z
 
+    # Sample mu
+
+    gs <- sampler_triplet_blockedGS(Y, epsilon, comp, p, Z, mu0, sigma0)
+    
+    # Labels - they identify the cluster of belonging for each observation
+    K <- gs$K
+    clusters[j,] <- K
+    Z <- gs$Z
     complete_matrix <- gs$complete_matrix
     
+    # Update p - stick breaking probabilities
     p <- p_sampler(K, theta, N)
+    K_unique <- unique(K)
     
-    # Predictive
+    # Update sigma0 - thanks to semiconjugacy
+    sigma0 = sqrt(rinvgamma(n=1, t + length(K_unique)/2, T_big+0.5*sum(Z[K_unique,1]^2)))
     
-    predictive[,j] = sapply(grid, function(x) sum(p*(.5*dnorm(x, Z[,1], sd=Z[,2])+.5*dnorm(x, -Z[,1], sd=Z[,3]))))
     
-    
+    # Compute empirical predictive distribution on a grid of points
+    predictive[j,] = sapply(Grid, function(x) sum(p*(.5*dnorm(x, Z[,1], sd=Z[,2])+.5*dnorm(x, -Z[,1], sd=Z[,3]))))
     ll <- list(beta = beta, component = comp, 
                weights = w, mu = complete_matrix[,1], tau1 = complete_matrix[,2], tau2=complete_matrix[,3], epsilon = epsilon)
     
+    # Hypothesis testig: H0: beta=0
+    p0[j] <- sum(dnorm(Y, comp*Z[K,1], sd=ifelse(comp==1, Z[K,2], Z[K,3]), log = T))
+    p1[j] <- sum(dnorm(Y, comp*Z[K,1]+X%*%beta, sd=ifelse(comp==1, Z[K,2], Z[K,3]), log = T))
+    
+    # Hypothesis testing for each beta:
+    if (j == 1){
+      for (kk in 1:k){
+        beta_h0 <- beta
+        beta_h0[kk] <- 0 
+        p0_single[kk] <- sum(dnorm(Y, comp*Z[K,1]+X%*%beta_h0 , sd=ifelse(comp==1, Z[K,2], Z[K,3]), log = T))
+        p1_single[kk] <- logSumExp(p1)
+      }
+    }
+    
+    if (j != 1){
+      for (kk in 1:k){
+        beta_h0 <- beta
+        beta_h0[kk] <- 0 
+        p0_single[kk] <- logSumExp(c(p0_single[kk], sum(dnorm(Y, comp*Z[K,1]+X%*%beta_h0 , sd=ifelse(comp==1, Z[K,2], Z[K,3]), log = T))))
+        p1_single[kk] <- logSumExp(p1)
+      }
+    }
     
     
     if (j >= burn_in & j%%thin ==0){
@@ -244,12 +260,12 @@ sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose
       write.table(matrix(ll$tau2, nrow=1), "tau2.csv", sep = ";", col.names = !file.exists("tau2.csv"), append = T, row.names = F)
       write.table(matrix(ll$epsilon, nrow=1), "epsilon.csv", sep = ";", col.names = !file.exists("epsilon.csv"), append = T, row.names = F)
       
-      
+      sigma0_saved = c(sigma0_saved, sigma0)
     }
     
-    
-  }
-  return(predictive)
+    }
+  return(list(predictive=predictive, sigma0=sigma0_saved, clusters=clusters, global_test = cbind(p0, p1),
+              single_test_avg = cbind(p0_single, p1_single)))
 }
 
 
