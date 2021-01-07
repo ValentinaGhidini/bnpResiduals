@@ -1,0 +1,20 @@
+Package: bnpResiduals
+Title: Linear Regression with Bayesian Non parametric Residuals
+Version: 0.0.0.9000
+Authors@R: 
+    person(given = "Valentina",
+           family = "Ghidini",
+           role = c("aut", "cre"),
+           email = "valentina.ghidini@phd.unibocconi.it",
+           comment = c(ORCID = "YOUR-ORCID-ID"))
+    person(given = "Filippo",
+           family = "Ascolani",
+           role = c("aut", "cre"),
+           email = "filippo.ascolani@phd.unibocconi.it",
+           comment = c(ORCID = "YOUR-ORCID-ID"))
+Description: This package allows the user to fit a linear model using a bayesian framework, in order to work with assumptions-free residuals.
+License: `use_mit_license()`
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.1.9000
