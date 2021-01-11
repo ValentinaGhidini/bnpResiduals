@@ -1,13 +1,3 @@
-library(VGAM)
-library(truncnorm)
-library(invgamma)
-library(readr)
-library(matrixcalc)
-library(MASS)
-library(datasets)
-library(matrixStats)
-library(progress)
-
 #' Initialize the blocked Gibbs sampler algorithm
 #'
 #' This function allows you to define the initialization values for the blocked Gibbs sampler algorithm

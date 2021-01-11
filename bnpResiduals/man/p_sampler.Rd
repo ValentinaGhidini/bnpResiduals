@@ -2,7 +2,7 @@
 % Please edit documentation in R/bnpResiduals_functions.R
 \name{p_sampler}
 \alias{p_sampler}
-\title{Sampling the distribution of the labels}
+\title{Sample the distribution of the labels}
 \usage{
 p_sampler(K, theta, N)
 }
