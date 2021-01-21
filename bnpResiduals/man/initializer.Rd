@@ -11,13 +11,13 @@ initializer(Z, p, comp, b0, B0, N, mu0, sigma0, complete_matrix)
 
 \item{p}{distribution of the N labels}
 
-\item{comp}{vector of dimension n, with possible entries +1 or -1, denoting the element of the mixture from which the residual has been sampled from}
+\item{comp}{vector of dimension n (= number of observations), with possible entries +1 or -1, denoting the element of the mixture from which the residual has been sampled from}
 
 \item{b0}{mean vector for the gaussian prior of beta}
 
 \item{B0}{covariance matrix for the gaussian prior of beta}
 
-\item{N}{number of elements in the truncation of the PY process}
+\item{N}{number of elements in the truncation of the Pitman-Yor process}
 
 \item{mu0}{hyperparameter for the baseline measure (mean of the Truncated Normal)}
 
@@ -26,7 +26,8 @@ initializer(Z, p, comp, b0, B0, N, mu0, sigma0, complete_matrix)
 \item{complete_matrix}{matrix of dimension nx3 containing all the triplets associated to each observation}
 }
 \description{
-This function allows you to define the initialization values for the blocked Gibbs sampler algorithm
+This function allows you to define the initialization values for the blocked Gibbs sampler algorithm, with the quantities illustrated in Ascolani, Ghidini (2021).
+All the quantities in input can be random, since they should not impact the final linear model estimation.
 }
 \examples{
 initializer <- initializer(Z, p, comp, b0, B0, N, mu0, sigma0, complete_matrix)

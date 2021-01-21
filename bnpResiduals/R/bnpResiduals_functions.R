@@ -1,19 +1,20 @@
 #' Initialize the blocked Gibbs sampler algorithm
 #'
-#' This function allows you to define the initialization values for the blocked Gibbs sampler algorithm
+#' This function allows you to define the initialization values for the blocked Gibbs sampler algorithm, with the quantities illustrated in Ascolani, Ghidini (2021).
+#' All the quantities in input can be random, since they should not impact the final linear model estimation.
 #' @param Z matrix containing the unique values of the triplets (Z1, Z2, Z3), each one associated with a label in 1:N
 #' @param p distribution of the N labels
-#' @param comp vector of dimension n, with possible entries +1 or -1, denoting the element of the mixture from which the residual has been sampled from
+#' @param comp vector of dimension n (= number of observations), with possible entries +1 or -1, denoting the element of the mixture from which the residual has been sampled from
 #' @param b0 mean vector for the gaussian prior of beta
 #' @param B0 covariance matrix for the gaussian prior of beta
-#' @param N number of elements in the truncation of the PY process
+#' @param N number of elements in the truncation of the Pitman-Yor process
 #' @param mu0 hyperparameter for the baseline measure (mean of the Truncated Normal)
 #' @param sigma0 hyperparameter for the baseline measure (variance of the Truncated Normal)
 #' @param complete_matrix matrix of dimension nx3 containing all the triplets associated to each observation
 #' @keywords initializer
 #' @examples
 #' initializer <- initializer(Z, p, comp, b0, B0, N, mu0, sigma0, complete_matrix)
-
+#' @export
 
 initializer <- function(Z, p, comp, b0, B0, N, mu0, sigma0, complete_matrix){
   return(list(Z = Z, p = p, comp = comp, b0 = b0, B0 = B0, N=N, mu0=mu0, sigma0=sigma0, complete_matrix=complete_matrix))
@@ -22,8 +23,8 @@ initializer <- function(Z, p, comp, b0, B0, N, mu0, sigma0, complete_matrix){
 
 #' Sample the distribution of the labels
 #'
-#' This function allows you to sample labels k=1, ..., N from the distribution defined in Ishwaran and James, 2001
-#' @param K set of classifications labels sampled in a previous iteration
+#' This function allows you to sample labels k=1, ..., N from the distribution defined in Ishwaran and James (2001)
+#' @param K set of classifications labels
 #' @param theta concentration parameter
 #' @param N number of elements in the truncation of the PY process
 #' @keywords p_sampler
@@ -44,17 +45,18 @@ p_sampler <- function(K,theta,N){
 
 #' Sample the coefficients of the linear model
 #'
-#' This function allows you to sample from the posterior distribution of the parameters beta, as explained in Ascolani, Ghidini
+#' This function allows you to sample from the posterior distribution of the parameters beta, as explained in Ascolani, Ghidini (2021)
 #' @param mu absolute value of the mean of the components of the residual mixture
 #' @param tau1 variance of the first component of the residual mixture
 #' @param tau2 variance of the second component of the residual mixture
 #' @param comp vector of dimension n, with possible entries +1 or -1, denoting the element of the mixture from which the residual has been sampled from
-#' @param y response variable
+#' @param Y response variable
+#' @param X design matrix
 #' @param b0 mean vector for the gaussian prior of beta
 #' @param B0 covariance matrix for the gaussian prior of beta
-#' @keywords beta_sampler
-sampler_beta <- function(mu, tau1, tau2, comp, y, B0, b0){
-  n <- length(mu)
+#' @keywords sampler_beta, beta_sampler
+sampler_beta <- function(mu, tau1, tau2, comp, Y, X, B0, b0){
+  n <- length(Y)
   if (!is.null(dim(comp))){
     comp = comp[,1]
   }
@@ -71,19 +73,19 @@ sampler_beta <- function(mu, tau1, tau2, comp, y, B0, b0){
   b = solve(B0) %*% b0 + t(X) %*% sigma_inv %*%(Y-M)
 
   return(list(beta=mvrnorm(n = 1, mu = solve(B)%*%b, Sigma=solve(B)),
-              sigma_inv = sigma_inv, B0 = B0, X = X))
+              sigma_inv = sigma_inv))
 }
 
 #' Compute the distribution of gamma
 #'
-#' This function allows you to compute the probability distribution of gamma, as explained in Ascolani, Ghidini (year)
+#' This function allows you to compute the probability distribution of gamma, as explained in Ascolani, Ghidini (2021)
 #' @param X design matrix
 #' @param Y response variable
 #' @param beta coefficients of the linear model
 #' @param mu absolute value of the mean of the components of the residual mixture
 #' @param tau1 variance of the first component of the residual mixture
 #' @param tau2 variance of the second component of the residual mixture
-#' @param log_rate compute all the probabilities in log-scale (log_rate=T)
+#' @param log_rate compute all the probabilities in log-scale
 #' @keywords sampler_gamma_prob
 sampler_gamma_prob <- function(X, Y, beta, mu, tau1, tau2, log_rate = T){ # mu is M
 
@@ -110,8 +112,8 @@ sampler_gamma_prob <- function(X, Y, beta, mu, tau1, tau2, log_rate = T){ # mu i
 #' Blocked Gibbs sampler algorithm
 #'
 #' This function allows you to sample an instance of (Z1, Z2, Z3) from the posterior distribution,
-#' exploiting the Blocked Gibbs Sampler algorithm as explained in Ascolani, Ghidini (year)
-#' @param X design matrix
+#' exploiting the Blocked Gibbs Sampler algorithm as explained in Ascolani, Ghidini (3032)
+#' @param Y response variable
 #' @param epsilon residuals
 #' @param comp vector of dimension n, with possible entries +1 or -1, denoting the element of the mixture from which the residual has been sampled from
 #' @param Z matrix containing the unique values of the triplets (Z1, Z2, Z3), each one associated with a label in 1:N
@@ -119,6 +121,7 @@ sampler_gamma_prob <- function(X, Y, beta, mu, tau1, tau2, log_rate = T){ # mu i
 #' @param mu0 hyperparameter for the baseline measure (mean of the Truncated Normal)
 #' @param sigma0 hyperparameter for the baseline measure (variance of the Truncated Normal)
 #' @keywords sampler_triplet_blockedGS, blocked gibbs sampler
+
 sampler_triplet_blockedGS <- function(Y,epsilon, comp, p, Z, mu0, sigma0){
   # Let's sample KZ
   N <- length(p)
@@ -151,20 +154,24 @@ sampler_triplet_blockedGS <- function(Y,epsilon, comp, p, Z, mu0, sigma0){
 
     m2 <- sum(K==j & comp==-1)
 
+
+    mu1 <- ifelse(m1 == 0,0,mean(epsilon[K == j & comp==1]))
+    mu2 <- ifelse(m2 == 0,0,mean(-epsilon[K == j & comp==-1]))
+
     mu_tilda = (mu0*Z[j,2]^2*Z[j,3]^2
-                +m1*mean(epsilon[comp==1])*sigma0^2*Z[j,3]^2
-                +m2*mean(-epsilon[comp==-1])*sigma0^2*Z[j,2]^2)/(Z[j,2]^2*Z[j,3]^2
-                                                                 +m1*sigma0^2*Z[j,3]^2+m2*sigma0^2*Z[j,2]^2)
+                +m1*mu1*sigma0^2*Z[j,3]^2
+                +m2*mu2*sigma0^2*Z[j,2]^2)/(Z[j,2]^2*Z[j,3]^2+m1*sigma0^2*Z[j,3]^2+m2*sigma0^2*Z[j,2]^2)
+
 
     sigma2_tilda = (1/sigma0^2+m1/Z[j,2]^2+m2/Z[j,3]^2)^(-1)
 
-    Z[j,1] <- rtruncnorm(n = 1, mean=mu_tilda, sd=sqrt(sigma2_tilda), a = 0)
+    Z[j,1] <- rtruncnorm(n = 1, mean=mu_tilda, sd=sqrt(sigma2_tilda), a = 0, b=Inf)
 
     s1_star = s1+m1/2
-    S1_star = ifelse(is.na(sum(epsilon[K==j & comp==1])), S1, S1+.5*sum((epsilon[K==j & comp==1]-Z[j,1])^2))
+    S1_star = ifelse(m1 == 0, S1, S1+.5*sum((epsilon[K==j & comp==1]-Z[j,1])^2))
 
     s2_star = s2+m2/2
-    S2_star = ifelse(is.na(sum(epsilon[K==j & comp==-1])), S2, S2+0.5*sum((epsilon[K==j & comp==-1]+Z[j,1])^2))
+    S2_star = ifelse(m2 == 0, S2, S2+0.5*sum((epsilon[K==j & comp==-1]+Z[j,1])^2))
 
 
     Z[j,2] <- sqrt(rinvgamma(1, shape=s1_star, rate=S1_star))
@@ -175,6 +182,9 @@ sampler_triplet_blockedGS <- function(Y,epsilon, comp, p, Z, mu0, sigma0){
   return(list(Z=Z, K=K, complete_matrix = complete_matrix))
 }
 
+
+
+
 #' Sample all the parameters defining the model
 #'
 #' This function allows you to obtain a Markov Chain with stationary distribution equal to the posterior of the parameters sampled, as explained in Ascolani, Ghidini (year)
@@ -184,7 +194,7 @@ sampler_triplet_blockedGS <- function(Y,epsilon, comp, p, Z, mu0, sigma0){
 #' @param iter number of iterations to consider
 #' @param burn_in number of initial sampled valued to discard
 #' @param thin thinning value
-#' @param Verbose boolean value which allows to print information about the course of the algorithm
+#' @param Verbose boolean value which allows to print information about the running of the algorithm
 #' @param log_rate compute all the probabilities in log-scale (default: log_rate=T)
 #' @keywords sampler
 sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose=T, log_rate=T){
@@ -238,7 +248,7 @@ sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose
       Sys.sleep(1 /iter)}
 
     # Sample beta
-    ss <- sampler_beta(complete_matrix[,1], complete_matrix[,2], complete_matrix[,3], comp, Y, B0, b0)
+    ss <- sampler_beta(complete_matrix[,1], complete_matrix[,2], complete_matrix[,3], comp, Y, X, B0, b0)
     beta <- ss$beta
 
     # Update Residuals
@@ -315,6 +325,83 @@ sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose
     }
   return(list(predictive=predictive, sigma0=sigma0_saved, clusters=clusters, global_test = cbind(p0, p1),
               single_test_avg = cbind(p0_single, p1_single)))
+}
+
+#' Fitting a Bayesian Nonparametric linear model
+#'
+#' This function allows you to ofit the linear model defined in Ascolani, Ghidini (year)
+#' @param X design matrix
+#' @param Y response variable
+#' @param initializer list of initial values - can be obtained as the output of the function initializer()
+#' @param iter number of iterations to consider
+#' @param burn_in number of initial sampled valued to discard
+#' @param thin thinning value
+#' @param  conf_level confidence level of the credible intervals
+#' @param cluster boolean value indicating whether the cluster analysis is desired
+#' @keywords model, linear model, lm
+#' @export
+
+bnp.lm <- function(X, Y, initializer, cluster = F, iter=10000, burn_in = 5000, thin = 10, conf_level=0.05){
+  samples <- sampler(X, Y, initializer_, iter=iter, burn_in = burn_in, thin = thin, log_rate = T )
+  eps <- read.table("epsilon.csv", header=F, skip=1, sep=";")
+  m <- read.table("betas.csv", header=F, skip=1, sep=";")
+  tau1 <-  read.table("tau1.csv", header=F, skip=1, sep=";")
+  tau2 <-  read.table("tau2.csv", header=F, skip=1, sep=";")
+  mu <-  read.table("mu.csv", header=F, skip=1, sep=";")
+
+  # Coefficients
+  betas_estimates <- apply(m, 2, mean)
+
+  # Empirical Credible Intervals
+  cred_int = credible_intervals(m, level = conf_level)
+
+  d <- cbind(betas_estimates, cred_int)
+  colnames(d) <- c("Estimate", paste0(conf_level*100/2, "%"), paste0(100-conf_level*100/2, "%"))
+
+  #Plot Residual Density
+  x11()
+  plot(density(as.numeric(eps[dim(eps)[1],])), type="l", col=1, lty=4, lwd=2, main = "Density of the Empirical Residuals")
+
+
+  # Clusters
+  if (cluster){
+    residuals <- apply(eps, 2, mean)
+    freq_clusters <- apply(samples$clusters, 2,table) # list
+    label <- c()
+
+    for (i in 1:length(freq_clusters)){
+      label[i] = min(as.numeric(names(which(freq_clusters[[i]]==max(freq_clusters[[i]])))))
+    }
+    x11()
+    par(mfrow=c(1,4))
+    plot(residuals, col=label , pch=19, ylab="Residual",
+         xlab="", main="Clustered residuals", cex=min(label, 3))#ifelse(label==label[which.min(residuals)] | label==label[which.max(residuals)], 1.5,1))
+
+    n_clusters <- length(unique(label)) # number of clusters
+    means_per_obs <- apply(mu, 2, mean)
+    tau1_per_obs <- apply(tau1, 2, mean)
+    tau2_per_obs <- apply(tau2, 2, mean)
+
+
+    plot(means_per_obs, pch=19, col=label,#ifelse(label==label[label[which.min(residuals)]] | label==label[label[which.max(residuals)]], 2, 1),
+         xlab="Observation", ylab=expression(mu), main = "Mean", cex=min(label, 3))#ifelse(label==label[label[which.min(residuals)]] | label==label[label[which.max(residuals)]], 1.5,.6))
+
+
+    plot(tau1_per_obs, pch=19, col=label,#ifelse(label==label[label[which.min(residuals)]] | label==label[label[which.max(residuals)]], 2, 1),
+         xlab="Observation", ylab="", main = "First Variance", cex=min(label, 3))#felse(label==label[label[which.min(residuals)]]| label==label[label[which.max(residuals)]], 1.5,.6))
+
+
+    plot(tau2_per_obs, pch=19, col=label,#ifelse(label==label[which.min(residuals)] | label==label[label[which.max(residuals)]], 2, 1),
+         xlab="Observation", ylab="", main = "Second Variance",  cex=min(label,3))#ifelse(label==label[label[which.min(residuals)]] | label==label[label[which.max(residuals)]], 1.5,.6))
+
+    return(list(coef = d, number_of_clusters = n_clusters, clusters=label))
+
+
+  }
+
+  return(list(coef = d))
+
+
 }
 
 

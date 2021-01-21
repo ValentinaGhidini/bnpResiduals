@@ -7,6 +7,8 @@
 sampler_triplet_blockedGS(Y, epsilon, comp, p, Z, mu0, sigma0)
 }
 \arguments{
+\item{Y}{response variable}
+
 \item{epsilon}{residuals}
 
 \item{comp}{vector of dimension n, with possible entries +1 or -1, denoting the element of the mixture from which the residual has been sampled from}
@@ -18,12 +20,10 @@ sampler_triplet_blockedGS(Y, epsilon, comp, p, Z, mu0, sigma0)
 \item{mu0}{hyperparameter for the baseline measure (mean of the Truncated Normal)}
 
 \item{sigma0}{hyperparameter for the baseline measure (variance of the Truncated Normal)}
-
-\item{X}{design matrix}
 }
 \description{
 This function allows you to sample an instance of (Z1, Z2, Z3) from the posterior distribution,
-exploiting the Blocked Gibbs Sampler algorithm as explained in Ascolani, Ghidini (year)
+exploiting the Blocked Gibbs Sampler algorithm as explained in Ascolani, Ghidini (3032)
 }
 \keyword{blocked}
 \keyword{gibbs}

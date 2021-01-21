@@ -4,7 +4,7 @@
 \alias{sampler_beta}
 \title{Sample the coefficients of the linear model}
 \usage{
-sampler_beta(mu, tau1, tau2, comp, y, B0, b0)
+sampler_beta(mu, tau1, tau2, comp, Y, X, B0, b0)
 }
 \arguments{
 \item{mu}{absolute value of the mean of the components of the residual mixture}
@@ -15,13 +15,16 @@ sampler_beta(mu, tau1, tau2, comp, y, B0, b0)
 
 \item{comp}{vector of dimension n, with possible entries +1 or -1, denoting the element of the mixture from which the residual has been sampled from}
 
-\item{y}{response variable}
+\item{Y}{response variable}
+
+\item{X}{design matrix}
 
 \item{B0}{covariance matrix for the gaussian prior of beta}
 
 \item{b0}{mean vector for the gaussian prior of beta}
 }
 \description{
-This function allows you to sample from the posterior distribution of the parameters beta, as explained in Ascolani, Ghidini
+This function allows you to sample from the posterior distribution of the parameters beta, as explained in Ascolani, Ghidini (2021)
 }
 \keyword{beta_sampler}
+\keyword{sampler_beta,}

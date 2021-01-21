@@ -19,9 +19,9 @@ sampler_gamma_prob(X, Y, beta, mu, tau1, tau2, log_rate = T)
 
 \item{tau2}{variance of the second component of the residual mixture}
 
-\item{log_rate}{compute all the probabilities in log-scale (log_rate=T)}
+\item{log_rate}{compute all the probabilities in log-scale}
 }
 \description{
-This function allows you to compute the probability distribution of gamma, as explained in Ascolani, Ghidini (year)
+This function allows you to compute the probability distribution of gamma, as explained in Ascolani, Ghidini (2021)
 }
 \keyword{sampler_gamma_prob}

@@ -28,7 +28,7 @@ sampler(
 
 \item{thin}{thinning value}
 
-\item{Verbose}{boolean value which allows to print information about the course of the algorithm}
+\item{Verbose}{boolean value which allows to print information about the running of the algorithm}
 
 \item{log_rate}{compute all the probabilities in log-scale (default: log_rate=T)}
 }

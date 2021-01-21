@@ -7,13 +7,13 @@
 p_sampler(K, theta, N)
 }
 \arguments{
-\item{K}{set of classifications labels sampled in a previous iteration}
+\item{K}{set of classifications labels}
 
 \item{theta}{concentration parameter}
 
 \item{N}{number of elements in the truncation of the PY process}
 }
 \description{
-This function allows you to sample labels k=1, ..., N from the distribution defined in Ishwaran and James, 2001
+This function allows you to sample labels k=1, ..., N from the distribution defined in Ishwaran and James (2001)
 }
 \keyword{p_sampler}
