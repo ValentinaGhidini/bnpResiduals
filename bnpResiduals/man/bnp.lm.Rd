@@ -12,7 +12,8 @@ bnp.lm(
   iter = 10000,
   burn_in = 5000,
   thin = 10,
-  conf_level = 0.05
+  conf_level = 0.05,
+  sigma = 0
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ bnp.lm(
 \item{thin}{thinning value}
 
 \item{conf_level}{confidence level of the credible intervals}
+
+\item{sigma}{parameter to regulate the Pitman-Yor process - default: sigma=0 (Dirichlet process case).}
 }
 \description{
 This function allows you to ofit the linear model defined in Ascolani, Ghidini (year)

@@ -12,7 +12,8 @@ sampler(
   burn_in = 10000,
   thin = 50,
   Verbose = T,
-  log_rate = T
+  log_rate = T,
+  sigma = 0
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ sampler(
 \item{Verbose}{boolean value which allows to print information about the running of the algorithm}
 
 \item{log_rate}{compute all the probabilities in log-scale (default: log_rate=T)}
+
+\item{sigma}{parameter of the Pitman Yor process - default: sigma=0 (Dirichlet process case)}
 }
 \description{
 This function allows you to obtain a Markov Chain with stationary distribution equal to the posterior of the parameters sampled, as explained in Ascolani, Ghidini (year)

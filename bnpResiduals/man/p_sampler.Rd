@@ -4,14 +4,16 @@
 \alias{p_sampler}
 \title{Sample the distribution of the labels}
 \usage{
-p_sampler(K, theta, N)
+p_sampler(K, theta, N, sigma = 0)
 }
 \arguments{
-\item{K}{set of classifications labels}
+\item{K}{set of classifications labels.}
 
-\item{theta}{concentration parameter}
+\item{theta}{concentration parameter.}
 
-\item{N}{number of elements in the truncation of the PY process}
+\item{N}{number of elements in the truncation of the PY process.}
+
+\item{sigma}{parameter to regulate the Pitman-Yor process - default: sigma=0 (Dirichlet process case).}
 }
 \description{
 This function allows you to sample labels k=1, ..., N from the distribution defined in Ishwaran and James (2001)

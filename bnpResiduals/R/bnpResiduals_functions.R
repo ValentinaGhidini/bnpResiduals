@@ -24,18 +24,19 @@ initializer <- function(Z, p, comp, b0, B0, N, mu0, sigma0, complete_matrix){
 #' Sample the distribution of the labels
 #'
 #' This function allows you to sample labels k=1, ..., N from the distribution defined in Ishwaran and James (2001)
-#' @param K set of classifications labels
-#' @param theta concentration parameter
-#' @param N number of elements in the truncation of the PY process
+#' @param K set of classifications labels.
+#' @param theta concentration parameter.
+#' @param N number of elements in the truncation of the PY process.
+#' @param sigma parameter to regulate the Pitman-Yor process - default: sigma=0 (Dirichlet process case).
 #' @keywords p_sampler
-p_sampler <- function(K,theta,N){
+p_sampler <- function(K,theta,N, sigma=0){
   res <- table(K) # summary of labels
   pos <- as.numeric(names(res)) # atoms with at least one label
   M <- rep(0,N)
   M[pos] <- res
   M <- M[-N]
   # sample betas
-  V <- rbeta(length(M),shape1 = 1+M,theta+sum(M)-cumsum(M))
+  V <- rbeta(length(M), shape1 = 1+M-sigma,  shape2 = theta+sum(M)-cumsum(M) + sigma*c(1:length(M))) ## To check!
   W <- cumprod(1-V)
   V <- c(V,1)
   W <- c(1,W)
@@ -196,8 +197,9 @@ sampler_triplet_blockedGS <- function(Y,epsilon, comp, p, Z, mu0, sigma0){
 #' @param thin thinning value
 #' @param Verbose boolean value which allows to print information about the running of the algorithm
 #' @param log_rate compute all the probabilities in log-scale (default: log_rate=T)
+#' @param sigma parameter of the Pitman Yor process - default: sigma=0 (Dirichlet process case)
 #' @keywords sampler
-sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose=T, log_rate=T){
+sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose=T, log_rate=T, sigma=0){
   n <- nrow(X)
   k <- ncol(X)
   # Write on file
@@ -273,7 +275,7 @@ sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose
     complete_matrix <- gs$complete_matrix
 
     # Update p - stick breaking probabilities
-    p <- p_sampler(K, theta, N)
+    p <- p_sampler(K, theta, N, sigma)
     K_unique <- unique(K)
 
     # Update sigma0 - thanks to semiconjugacy
@@ -338,11 +340,12 @@ sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose
 #' @param thin thinning value
 #' @param  conf_level confidence level of the credible intervals
 #' @param cluster boolean value indicating whether the cluster analysis is desired
+#' @param sigma parameter to regulate the Pitman-Yor process - default: sigma=0 (Dirichlet process case).
 #' @keywords model, linear model, lm
 #' @export
 
-bnp.lm <- function(X, Y, initializer, cluster = F, iter=10000, burn_in = 5000, thin = 10, conf_level=0.05){
-  samples <- sampler(X, Y, initializer_, iter=iter, burn_in = burn_in, thin = thin, log_rate = T )
+bnp.lm <- function(X, Y, initializer, cluster = F, iter=10000, burn_in = 5000, thin = 10, conf_level=0.05, sigma=0){
+  samples <- sampler(X, Y, initializer_, iter=iter, burn_in = burn_in, thin = thin, log_rate = T, , sigma=sigma)
   eps <- read.table("epsilon.csv", header=F, skip=1, sep=";")
   m <- read.table("betas.csv", header=F, skip=1, sep=";")
   tau1 <-  read.table("tau1.csv", header=F, skip=1, sep=";")
