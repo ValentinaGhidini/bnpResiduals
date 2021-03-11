@@ -338,7 +338,7 @@ sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose
 #' @param iter number of iterations to consider
 #' @param burn_in number of initial sampled valued to discard
 #' @param thin thinning value
-#' @param  conf_level confidence level of the credible intervals
+#' @param conf_level confidence level of the credible intervals
 #' @param cluster boolean value indicating whether the cluster analysis is desired
 #' @param sigma parameter to regulate the Pitman-Yor process - default: sigma=0 (Dirichlet process case).
 #' @keywords model, linear model, lm
@@ -407,6 +407,85 @@ bnp.lm <- function(X, Y, initializer, cluster = F, iter=10000, burn_in = 5000, t
 
 }
 
+# AutoRegressive model for time series
+
+#' This function defines a design matrix, to estimate the AR(q) model
+#'
+#' @param X Covariates of interest
+#' @param Y Time Series of interest
+#' @param q Order of the AutoRegressive model AR(q)
+designmatrix.ar <- function(X, Y, q){
+  k <- ncol(X)
+  # Let's define the new design matrix
+  Y_new <- Y[q:length(Y)]
+  matrix1 <- NULL
+  matrix2 <- NULL
+  for (i in 0:(nrow(X)-q - 1)){
+    ind1 <- sort((1+i):(i+q), decreasing = T)
+    matrix1 <- rbind(matrix1, Y[ind1])
+
+    if (dim(X)[1] != 0){
+      matrix2 <- rbind(matrix2, X[q+i+1,])
+      design <- cbind(matrix1, matrix2)
+    }
+    else{
+      design <- matrix1    }
+
+  }
+
+  return(design)
+
+}
+
+
+#' Fitting a Bayesian Nonparametric AutoRegressive model of order q - AR(q)
+#'
+#' @param Y Time series
+#' @param q Order of the AutoRegressive model AR(q)
+#' @param X Covariates of interest (by default, the function fits only the autoregressive part)
+#' @param initializer list of initial values - can be obtained as the output of the function initializer()
+#' @param iter number of iterations to consider
+#' @param burn_in number of initial sampled valued to discard
+#' @param thin thinning value
+#' @param conf_level confidence level of the credible intervals
+#' @param cluster boolean value indicating whether the cluster analysis is desired
+#' @param sigma parameter to regulate the Pitman-Yor process - default: sigma=0 (Dirichlet process case).
+#' @keywords model, ar model, ar, autoregressive model
+#' @export
+bnp.ar <- function(Y, q, initializer,X = matrix(0, ncol=0, nrow=0), iter = 10000, burn_in = 5000,
+                   thin = 10, conf_level = 0.05, sigma = 0, plot=F){
+  n = length(Y)
+  k = ncol(X)
+  X_design <- designmatrix.ar(X, Y, q)
+  Y_design = Y[(q+1):length(Y)]
+
+  samples <- sampler(X_design, Y_design, initializer_, iter = iter, burn_in = burn_in,
+                                    thin = thin, log_rate = T, sigma = sigma)
+  eps <- read.table("epsilon.csv", header = F, skip = 1,
+                    sep = ";")
+  m <- read.table("betas.csv", header = F, skip = 1,
+                  sep = ";")
+  tau1 <- read.table("tau1.csv", header = F, skip = 1,
+                     sep = ";")
+  tau2 <- read.table("tau2.csv", header = F, skip = 1,
+                     sep = ";")
+  mu <- read.table("mu.csv", header = F, skip = 1, sep = ";")
+  betas_estimates <- apply(m, 2, mean)
+  cred_int = bnpResiduals:::credible_intervals(m, level = conf_level)
+  d <- cbind(betas_estimates, cred_int)
+  colnames(d) <- c("Estimate", paste0(conf_level * 100/2,
+                                      "%"), paste0(100 - conf_level * 100/2, "%"))
+  if (plot){
+    x11()
+    plot(density(as.numeric(eps[dim(eps)[1], ])), type = "l",
+         col = 1, lty = 4, lwd = 2, main = "Density of the Empirical Residuals")
+  }
+
+  return(list(coef = d))
+
+}
+
+
 
 # Diagnostic and Inference
 
@@ -416,6 +495,7 @@ bnp.lm <- function(X, Y, initializer, cluster = F, iter=10000, burn_in = 5000, t
 #' @param parameters empirical posterior distribution of the parameters of interest
 #' @param level credible level (default: level=0.05)
 #' @keywords credible intervals, diagnostic
+
 credible_intervals <- function(parameters, level = 0.05){
   if (is.null(dim(parameters))){
     parametrs = as.matrix(parameters)
