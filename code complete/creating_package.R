@@ -1,13 +1,21 @@
+# Create and install package
 library(devtools)
 library(roxygen2)
-setwd("C:\\Users\\valen\\Desktop")
+setwd("C:\\Users\\valen\\Desktop") # directory with bnpResidual
 create("bnpResiduals")
 
 setwd("./bnpResiduals")
+
 document()
 
 setwd("..")
+
 install("bnpResiduals")
+
+
+
+## When you have already installed the package, start from here
+
 library(bnpResiduals)
 ?initializer
 ?p_sampler
@@ -15,19 +23,48 @@ library(bnpResiduals)
 ?sampler
 ?coverage
 
-
+?bnp.lm
+?bnp.ar
+?bnp.GP
 ## Trying analysis with package functions
 
-n <- 100
+n <- 500
 k <- 9
 beta = c(rep(-1, 3), rep(0,1), rep(1,6))
+
 beta_true = beta
 
 
 #Generate residuals
 muu = 100
-tau1 = 2
-tau2 = 3
+tau1 = 1
+tau2 = 50
+
+ugly_residuals <- function(n){
+  mu <- 0
+  res <- c()
+  s = 1
+  for(i in 1:n){
+
+    res[i] <- rnorm(1, s*(mu+i), sd= sqrt(i))
+    s = s*(-1)
+  }
+  return(res)
+}
+
+gen_residuals_fourgaussians <- function(n, mu1, mu2, tau1, tau2, tau3, tau4){
+  #mu: mean (positive value)
+  #tau1: variance of positive part
+  #tau2: variance of negative part
+  res <- rep(0,n)
+  bol <- sample(c(T,F),n, replace = T)
+  print(bol)
+  res[bol] <- gen_residuals(sum(bol), mu1, tau1, tau2)
+  res[!bol] <- gen_residuals(n-sum(bol),mu2, tau3, tau4)
+  return(res)
+}
+
+
 
 gen_residuals <- function(n, mu, tau1, tau2){
   #mu: mean (positive value)
@@ -40,6 +77,8 @@ gen_residuals <- function(n, mu, tau1, tau2){
   return(res)
 }
 
+
+
 gen_residuals_T <- function(n, df1, df2, muu){
   #mu: mean (positive value)
   #tau1: variance of positive part
@@ -51,16 +90,33 @@ gen_residuals_T <- function(n, df1, df2, muu){
   return(res)
 }
 
+gen_residuals_trimodal <- function(n, mu, tau1, tau2, tau3){
+  #mu: mean (positive value)
+  #tau1: variance of positive part
+  #tau2: variance of negative part
+  res <- rep(0,n)
+  bol <- sample(c(1,2,3),n, replace = T)
+  res[bol==1] <- rnorm(sum(bol==1), mean=0, sd = tau1)
+  res[bol==2] <- rnorm(sum(bol==2), mean=-mu, sd = tau2)
+  res[bol==3] <- rnorm(sum(bol==3), mean=mu, sd = tau3)
+  return(res)
+}
+
+dat <- ugly_residuals(n)
+#dat <- gen_residuals_fourgaussians(n, 1000,50,20,20,5,5)
+#dat <- gen_residuals_trimodal(n, 200, 10, 20, 10)
 #dat <- rnorm(n)
-#dat <- gen_residuals_T(n,tau1,tau2, muu)
-dat <- rt(n, df=2.1)
-#dat <- gen_residuals_T(n, 2, 3, 100)
+#dat <- runif(n, -50, 50)
+#dat <- gen_residuals(n, muu, tau1, tau2)
+#dat <- rt(n, df=1)
+#dat <- ifelse(sample(size=n, x=c(0,1), replace=T)==1, gen_residuals(n, 30, 2, 10), gen_residuals(n, 200, 150, 50))
+#dat <- gen_residuals_T(n, 2, 3, 2)
 # Density of the residuals
 
 # Insert an outlier
 #dat[c(1,length(dat))] <- c(-30, 100)
-dat[sample(1:n, 15)] <- -20:-6
-dat[sample(1:n, 15)] <- 6:20
+#dat[sample(1:n, 15)] <- -20:-6
+#dat[sample(1:n, 15)] <- 6:20
 
 plot(density(dat))
 residuals <- dat
@@ -72,17 +128,28 @@ gen_data <- function(X,beta,residuals){
   return(y)
 }
 
+# Generate data
 X <- round(matrix(rnorm(n*k), nrow = n, ncol = k),2) #k
-X <- cbind(1, X)#cbind(1,X)
+X <- cbind(rnorm(n), X)#cbind(1,X)
 Y <- gen_data(X,beta_true,residuals)
 fit <- lm(Y~.,data = data.frame(X[,-1]))
+
+
+## Data for GP
+
+X <- matrix(seq(-100, 100), by=.1, ncol=1)
+n = length(X)
+Y = sin(X) + rnorm(n, 0, 0.2)
+x.star <- seq(-20, 20, by = 0.5)
+
 ## Initialization
 n <- nrow(X)
-k <- ncol(X)-1
+k <- ncol(X)
 
 b0 <-  rep(0, k+1)
 
 B0 <-  diag(10, k+1)
+
 s1 <-  2
 s2 <-  2
 S1 <- 1#0.01
@@ -92,13 +159,13 @@ sigma2=10
 
 theta = 1
 
-b <- coef(lm(Y~X[,-1]))
+b <- coef(lm(Y~X-1))
 
 epsilon = Y-X%*%b # ols residuals
 
 comp <- ifelse(epsilon > 0, 1, -1)
 
-N = 150
+N = 200
 
 log_s = T
 V <- rbeta(N-1,shape1 = 1,theta)
@@ -114,12 +181,69 @@ library(invgamma)
 Z <- cbind(rtruncnorm(N,a = 0, mean = mu0, sd = sigma0), sqrt(rinvgamma(N,shape = s1, rate = S1)), sqrt(rinvgamma(N,shape = s2, rate = S2)))
 complete_matrix = matrix(1, nrow=n, ncol=3)
 
+
 initializer_ <- bnpResiduals:::initializer(Z, p, comp, b0, B0, N, mu0, sigma0, complete_matrix)
 
+
+
+
+
+
+
+
+ss<-bnpResiduals:::bnp.GP(X, Y, initializer_, iter = 5000, Xstar=x.star)
+
+values <- cbind(x = x.star, ss$preds)
+prediction = apply(ss$preds, 1, mean)
+library(reshape2)
+library(ggplot2)
+values <- melt(values,id="x")
+
+x.star
+df <- data.frame(cbind(x.star = ss$Xstar[,1], f.star.bar=prediction))
+colnames(df) <- c("x.star", "f.star.bar")
+figg <-  ggplot(values,aes(x=Var1,y=value)) +
+  #geom_line(aes(group=Var1), colour="grey80") +
+  geom_line(data=data.frame(X, Y), aes(x=X, y=Y), colour="blue")+
+  geom_line(data=df,aes(x=x.star,y=prediction), colour="red", size=1) +
+  geom_point(data=data.frame(x=X, y=Y),aes(x=x,y=y)) +
+  theme_bw() +
+  scale_y_continuous(lim=c(min(Y)-1,max(Y)+1), name="output, f(x)") +
+  xlab("input, x")
+figg
+
+
+
+eps <- read.table("epsilon.csv", header=F, skip=1, sep=";")
+#C:\\Users\\valen\\Desktop\\Simulazioni\\Residui Gaussiani\\Results\\
+#C:\\Users\\valen\\Desktop\\Simulazioni\\Residui Mistura di T\\Results\\
+#C:\\Users\\valen\\Desktop\\Simulazioni\\Residui T1\\Results\\
+#m <- read.table("betas.csv", header=F, skip=1, sep=";")
+tau1 <-  read.table("tau1.csv", header=F, skip=1, sep=";")
+tau2 <-  read.table("tau2.csv", header=F, skip=1, sep=";")
+mu <-  read.table("mu.csv", header=F, skip=1, sep=";")
+
+head(mu)
+
+plot(mu[,10], type="l")
+plot(tau1[,40], type="l")
+plot(tau2[,40], type="l")
+
+plot(apply(ss$eta, 1, mean), pch=19)
+
+# Linear model
+model <- bnpResiduals:::bnp.lm(X, Y, initializer_, cluster = T, iter=25000, burn_in = 2000, thin=50, sigma=0.8)
+# sigma = .5 non cambia un granch? - ma la densit? stimata ? pi? smooth
+# sigma = .8 bene! anche densit?
+# sigma = 1 bene! anche densit?, ma un solo cluster ((???))
+
+# ugly residuals
+# sigma=0 --- SCHIFO - forse solo la shape della densit? si salva
+# sigma=0.5 --- Non bene - forse troppa  variabilit??
 ## Algorithm
 begin = Sys.time()
 print(begin)
-trial <- bnpResiduals:::sampler(X, Y, initializer_, iter=10000, burn_in = 5000, thin = 10, log_rate = log_s )
+trial <- bnpResiduals:::sampler(X, Y, initializer_, iter=5000, burn_in = 1000, thin = 10, log_rate = log_s )
 end = Sys.time()
 end - begin
 
@@ -138,9 +262,13 @@ tau1 <-  read.table("tau1.csv", header=F, skip=1, sep=";")
 tau2 <-  read.table("tau2.csv", header=F, skip=1, sep=";")
 mu <-  read.table("mu.csv", header=F, skip=1, sep=";")
 
+par(mfrow=c(1,1))
+plot(density(dat))
+lines(density(as.numeric(eps[dim(eps)[1],])), type="l", col=1, lty=4, lwd=2, main = "Density of the Empirical Residuals")
 
 # Autocorrelation of the estimates of a coefficient
-to_study = 1
+to_study = 2
+
 beta_est = m[,to_study]
 acf(beta_est)
 
@@ -154,6 +282,9 @@ abline(h=mean(beta_est, na.rm=T), col=3, lty=2)
 d <- data.frame(cbind(beta_true[to_study], mean(beta_est)))
 colnames(d) <- c("True Value", "Estimate")
 rownames(d) <- paste("Beta", to_study)
+
+
+
 betas_estimates <- apply(m, 2, mean)
 d <- cbind(betas_estimates, beta_true, coef(lm(Y~X[,-1])))
 colnames(d) = c("estimates", "true values", "OLS")
@@ -163,7 +294,7 @@ print(xtable(round(d,3)))
 
 
 # Empirical Credible Intervals
-cred_int = credible_intervals(m)
+cred_int = bnpResiduals:::credible_intervals(m)
 mean(cred_int[,2]-cred_int[,1])
 
 
@@ -218,21 +349,22 @@ for (i in 1:length(freq_clusters)){
   label[i] = min(as.numeric(names(which(freq_clusters[[i]]==max(freq_clusters[[i]])))))
 }
 
-plot(as.numeric(eps[nrow(eps),]), col=ifelse(label==label[1] | label==label[length(label)], 2,1) , pch=19, ylab="Residual",
-     xlab="", main="Clustered residuals", cex=ifelse(label==label[1] | label==label[length(label)], 1.5,1))
+
+plot(as.numeric(eps[nrow(eps),]), col=label,#ifelse(label==label[1] | label==label[length(label)], 2,1) , pch=19, ylab="Residual",
+     xlab="", main="Clustered residuals", cex=ifelse(label==label[1] | label==label[length(label)], 1.5,1), pch=19, ylab="Residual")
 
 length(unique(label)) # number of clusters
-
+label[c(1, length(label))] = label[c(1, length(label))]  + 1
 means_per_obs <- apply(mu, 2, mean)
-plot(means_per_obs, pch=19, col=ifelse(label==label[1] | label==label[length(label)], 2, 1),
+plot(means_per_obs, pch=19, col=label,#ifelse(label==label[1] | label==label[length(label)], 2, 1),
      xlab="Observation", ylab=expression(mu), main = "Mean", cex=ifelse(label==label[1] | label==label[length(label)], 1.5,.6))
 
 tau1_per_obs <- apply(tau1, 2, mean)
-plot(tau1_per_obs, pch=19, col=ifelse(label==label[1] | label==label[length(label)], 2, 1),
+plot(tau1_per_obs, pch=19, col=label, #ifelse(label==label[1] | label==label[length(label)], 2, 1),
      xlab="Observation", ylab="", main = "First Variance", cex=ifelse(label==label[1] | label==label[length(label)], 1.5,.6))
 
 tau2_per_obs <- apply(tau2, 2, mean)
-plot(tau2_per_obs, pch=19, col=ifelse(label==label[1] | label==label[length(label)], 2, 1),
+plot(tau2_per_obs, pch=19, col=label,#lifelse(label==label[1] | label==label[length(label)], 2, 1),
      xlab="Observation", ylab="", main = "Second Variance",  cex=ifelse(label==label[1] | label==label[length(label)], 1.5,.6))
 
 
@@ -256,4 +388,212 @@ mean(dist(betas_estimates[-1]-beta_true[-1]))
 
 mean(dist(coef(ols_model)[-1]-beta_true[-1]))
 plot(trial$sigma0, type="l")
+
+
+# Replicating tables
+
+initializer <- function(Z, p, comp, b0, B0, N, mu0, sigma0, complete_matrix){
+  return(list(Z = Z, p = p, comp = comp, b0 = b0, B0 = B0, N=N, mu0=mu0, sigma0=sigma0, complete_matrix=complete_matrix))
+
+}
+
+
+muu <- c(10,30,100)
+dff<- c(2.1, 5,10,50)
+total <- matrix(nrow = 4, ncol= 6)
+samplesize <- c(15,50,500,1000)
+
+#n = 100
+library(attempt)
+#beta_true <- c(-1, beta_true)#beta_true[-1]
+fig=F
+for (s in 1:length(samplesize)){
+  #print(muu[s])
+  cover <- c()
+  cover_ols <- c()
+  mean_width <- c()
+  mean_width_ols <- c()
+  mean_dist <- c()
+  mean_dist_ols <- c()
+  test_gs <- c()
+  test_ols <- c()
+  #k = length(beta_true)
+  n =samplesize[s]
+  X <- round(matrix(rnorm(n*k), nrow = n, ncol = k),2) #k
+  X <- cbind(1, X)#cbind(1,X)
+
+
+  for (i in 1:20){
+
+    print(i)
+
+    Y <- gen_data(X, beta_true, rnorm(n))#gen_residuals_T(n, 2, 3, muu[s]))#rnorm(n))#rt(n, df=dff[s]))# rnorm(n))##gen_residuals_T(n, 2, 3, muu[s]))####gen_residuals_T(n, 2, 3, muu[s]))
+    #print(Y)#)#df=2.1
+    epsilon = Y-X%*%coef(lm(Y~X-1)) # ols residuals
+    comp <- ifelse(epsilon > 0, 1, -1)
+    ols_model <- lm(Y~X)
+    n <- nrow(X)
+    k <- ncol(X)-1
+
+    b0 <-  rep(0, k+1)
+    B0 <-  diag(10, k+1)
+    s1 <-  2
+    s2 <-  2
+    S1 <- 1#0.01
+    S2 <-  1#30
+
+    sigma2=10
+
+    theta = 1
+
+    b <- coef(lm(Y~X-1))
+
+    N = 150
+
+    log_s = T
+    V <- rbeta(N-1,shape1 = 1,theta)
+    W <- cumprod(1-V)
+    V <- c(V,1)
+    W <- c(1,W)
+    p <- V*W
+
+    mu0 = 0
+    sigma0 = 1
+    K <- sample(1:N, size = n, replace = T, prob = p)
+    Z <- cbind(rtruncnorm(N,a = 0, mean = mu0, sd = sigma0), sqrt(rinvgamma(N,shape = s1, rate = S1)), sqrt(rinvgamma(N,shape = s2, rate = S2)))
+    temp <- bnpResiduals:::sampler_triplet_blockedGS(Y,epsilon, comp, p, Z, mu0, sigma0)
+    K <- temp$K
+    Z <- temp$Z
+    complete_matrix = Z[K,]
+
+    initializer <- list(Z = Z, p = p, comp = comp, b0 = b0, B0 = B0, N=N, mu0=mu0, sigma0=sigma0, complete_matrix=complete_matrix)
+
+
+    attempt(trial <- sampler(X, Y, initializer, iter=500, burn_in = 50, thin = 10, log_rate = log_s ), "error")
+    m <- read.table("betas.csv", header=F, skip=1, sep=";")#[,-1]
+    intervals = credible_intervals(m)#[-1,]
+    #print(apply(m, 2, mean))
+    betas_estimates <- apply(m, 2, mean)
+    #cover[i] <- sum(beta_true>=intervals[,1] & beta_true[-1]<=intervals[,2])/length(beta_true)
+    intervals_ols <- confint(lm(Y~X-1))
+    #cover_ols[i] <- sum(beta_true>=intervals_ols[,1] & beta_true<=intervals_ols[,2])/length(beta_true)
+    mean_width[i] <- mean(intervals[,2]-intervals[,1])
+    mean_width_ols[i] <- mean(intervals_ols[,2]-intervals_ols[,1])
+    mean_dist[i] <- dist(apply(m, 2, mean)-beta_true)
+    mean_dist_ols[i] <- dist(coef(lm(Y~X-1))-beta_true)
+    #print(apply(m, 2, mean))
+
+    #
+    #print(intervals)
+    beta_true_bol <- (beta_true==0)
+    intervals_bol <- (intervals[,1]<0 & intervals[,2]>0)
+
+    test_gs[i] <- sum(beta_true_bol == intervals_bol)
+    #print(intervals_bol)
+    #print(beta_true_bol)
+    # print(test_gs)
+    #test_gs[i] <- sum((intervals[,1]<0 & intervals[,2]>0 & beta_true==0) |
+    #                   (((intervals[,1]<0 & intervals[,2]<0) |(intervals[,1]>0 & intervals[,2]>0))& beta_true!=0))/length(beta_true)
+
+
+    test_ols[i] <- sum((intervals_ols[,1]<0 & intervals_ols[,2]>0 & beta_true==0) |
+                         (((intervals_ols[,1]<0 & intervals_ols[,2]<0) |(intervals_ols[,1]>0 & intervals_ols[,2]>0))& beta_true!=0))/length(beta_true)
+    fig=F
+    if (fig){
+
+      x11()
+      ols_model <- lm(Y~X[,-1])
+      par(mfrow=c(1,1))
+      plot(beta_true, type="l", main="OLS coefficients vs Proposed coefficients", ylab="coefficients",
+           ylim=c(-3,3))
+      polygon(c(rev(1:(k+1)), 1:(k+1)), c(rev(intervals[ ,2]), intervals[ ,1]), col = rgb(1,0,0, alpha=0.2), border = NA)
+      lines(1:(k+1), intervals[ ,2], lty = 'dashed', col = 'red')
+      lines(1:(k+1), intervals[ ,1], lty = 'dashed', col = 'red')
+      lines(betas_estimates, col=2)
+      points(betas_estimates, col=2, pch=19)
+      polygon(c(rev(1:(k+1)), 1:(k+1)), c(rev(confint(ols_model)[ ,2]), confint(ols_model)[ ,1]), col = rgb(0,1,0, alpha=0.1), border = NA)
+      lines(1:(k+1), confint(ols_model)[ ,2], lty = 'dashed', col = 'green')
+      lines(1:(k+1), confint(ols_model)[ ,1], lty = 'dashed', col = 'green')
+      lines(coef(ols_model), col=3)
+      points(coef(ols_model), col=3, pch=19) }
+
+
+  }
+
+
+  total[s,] <- rbind(mean(test_gs/length(beta_true)),
+                     mean(test_ols),
+                     mean(mean_width),
+                     mean(mean_width_ols),
+
+                     mean(mean_dist),
+                     mean(mean_dist_ols))
+
+}
+
+
+#### AUTOREGRESSIVE MODEL - CHECK ############
+n <- 100 # length of the time serie
+k <- 3 # let's include k covariates
+
+# Simulate the starting data
+Y <- rnorm(n)
+X <- matrix(rnorm(n*k), ncol=k)
+
+
+
+qq = 2 # AR(qq)
+# Let's compute the exact data
+for (t in qq:(length(Y)-1)){
+  Y[t+1] =  .5*Y[t] + .5*Y[t-1] + X[t+1,1] + X[t+1,2]+rnorm(1, 0, 5)#X[t,]%*%delta +Y[(t-count):(t-count+qq-1)]%*%gamma + rnorm(1)#gen_residuals(1, 100, 30, 3) #+
+}
+
+
+X_design <- bnpResiduals:::designmatrix.ar(X, Y, qq)
+Y_design <- Y[(qq+1):length(Y)]
+
+# OLS coef
+b <- coef(lm(Y_design~ X_design -1))
+b
+
+# Initialization
+b0 <-  rep(0, length(b))
+
+B0 <-  diag(10, length(b))
+
+s1 <-  2
+s2 <-  2
+S1 <- 1#0.01
+S2 <-  1#30
+
+sigma2=10
+
+theta = 1
+epsilon = Y_design-X_design%*%b # ols residuals
+
+comp <- ifelse(epsilon > 0, 1, -1)
+
+N = 150
+
+log_s = T
+V <- rbeta(N-1,shape1 = 1,theta)
+
+
+W <- cumprod(1-V)
+V <- c(V,1)
+W <- c(1,W)
+p <- V*W
+
+mu0 = 1
+sigma0 = sqrt(25)
+library(truncnorm)
+library(invgamma)
+Z <- cbind(rtruncnorm(N,a = 0, mean = mu0, sd = sigma0), sqrt(rinvgamma(N,shape = s1, rate = S1)), sqrt(rinvgamma(N,shape = s2, rate = S2)))
+complete_matrix = matrix(1, nrow=nrow(X_design), ncol=3)
+
+
+initializer_ <- bnpResiduals:::initializer(Z, p, comp, b0, B0, N, mu0, sigma0, complete_matrix)
+# model
+
+
 
