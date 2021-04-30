@@ -4,15 +4,9 @@
 \alias{sampler_gamma_prob}
 \title{Compute the distribution of gamma}
 \usage{
-sampler_gamma_prob(X, Y, beta, mu, tau1, tau2, log_rate = T)
+sampler_gamma_prob(epsilon, mu, tau1, tau2, log_rate = T)
 }
 \arguments{
-\item{X}{design matrix}
-
-\item{Y}{response variable}
-
-\item{beta}{coefficients of the linear model}
-
 \item{mu}{absolute value of the mean of the components of the residual mixture}
 
 \item{tau1}{variance of the first component of the residual mixture}
@@ -20,6 +14,12 @@ sampler_gamma_prob(X, Y, beta, mu, tau1, tau2, log_rate = T)
 \item{tau2}{variance of the second component of the residual mixture}
 
 \item{log_rate}{compute all the probabilities in log-scale}
+
+\item{X}{design matrix}
+
+\item{Y}{response variable}
+
+\item{beta}{coefficients of the linear model}
 }
 \description{
 This function allows you to compute the probability distribution of gamma, as explained in Ascolani, Ghidini (2021)

@@ -5,8 +5,8 @@
 #' @param Z matrix containing the unique values of the triplets (Z1, Z2, Z3), each one associated with a label in 1:N
 #' @param p distribution of the N labels
 #' @param comp vector of dimension n (= number of observations), with possible entries +1 or -1, denoting the element of the mixture from which the residual has been sampled from
-#' @param b0 mean vector for the gaussian prior of beta
-#' @param B0 covariance matrix for the gaussian prior of beta
+#' @param b0 mean vector for the gaussian prior of beta - to specify just in case of linear models
+#' @param B0 covariance matrix for the gaussian prior of beta - to specify just in case of linear models
 #' @param N number of elements in the truncation of the Pitman-Yor process
 #' @param mu0 hyperparameter for the baseline measure (mean of the Truncated Normal)
 #' @param sigma0 hyperparameter for the baseline measure (variance of the Truncated Normal)
@@ -16,7 +16,7 @@
 #' initializer <- initializer(Z, p, comp, b0, B0, N, mu0, sigma0, complete_matrix)
 #' @export
 
-initializer <- function(Z, p, comp, b0, B0, N, mu0, sigma0, complete_matrix){
+initializer <- function(Z, p, comp, N, mu0, sigma0, complete_matrix, b0=NULL, B0=NULL ){
   return(list(Z = Z, p = p, comp = comp, b0 = b0, B0 = B0, N=N, mu0=mu0, sigma0=sigma0, complete_matrix=complete_matrix))
 
 }
@@ -88,12 +88,12 @@ sampler_beta <- function(mu, tau1, tau2, comp, Y, X, B0, b0){
 #' @param tau2 variance of the second component of the residual mixture
 #' @param log_rate compute all the probabilities in log-scale
 #' @keywords sampler_gamma_prob
-sampler_gamma_prob <- function(X, Y, beta, mu, tau1, tau2, log_rate = T){ # mu is M
+sampler_gamma_prob <- function(epsilon, mu, tau1, tau2, log_rate = T){ # mu is M
 
   ww <- matrix(0, nrow=n, ncol=2)
 
-  w1 <- dnorm(Y, mean = X%*%beta+mu, sd = tau1, log = log_rate)
-  w2 <- dnorm(Y, mean = X%*%beta-mu, sd = tau2, log = log_rate)
+  w1 <- dnorm(epsilon, mean = mu, sd = tau1, log = log_rate)
+  w2 <- dnorm(epsilon, mean = -mu, sd = tau2, log = log_rate)
 
   ww <- cbind(w1, w2)
   # Normalize the weights - obtain a probability measure
@@ -257,7 +257,7 @@ sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose
     epsilon <- Y-X%*%beta
 
     # Gamma prob
-    w <- sampler_gamma_prob(X, Y, beta, complete_matrix[,1], complete_matrix[,2], complete_matrix[,3], log_rate = log_rate)
+    w <- sampler_gamma_prob(epsilon, complete_matrix[,1], complete_matrix[,2], complete_matrix[,3], log_rate = log_rate)
 
     #Update Gamma (comp)
     comp = apply(w,1,function(x){
@@ -338,7 +338,7 @@ sampler <- function(X, Y, initializer, iter, burn_in = 10000, thin = 50, Verbose
 #' @param iter number of iterations to consider
 #' @param burn_in number of initial sampled valued to discard
 #' @param thin thinning value
-#' @param  conf_level confidence level of the credible intervals
+#' @param conf_level confidence level of the credible intervals
 #' @param cluster boolean value indicating whether the cluster analysis is desired
 #' @param sigma parameter to regulate the Pitman-Yor process - default: sigma=0 (Dirichlet process case).
 #' @keywords model, linear model, lm
@@ -407,6 +407,253 @@ bnp.lm <- function(X, Y, initializer, cluster = F, iter=10000, burn_in = 5000, t
 
 }
 
+# AutoRegressive model for time series
+
+#' This function defines a design matrix, to estimate the AR(q) model
+#'
+#' @param X Covariates of interest
+#' @param Y Time Series of interest
+#' @param q Order of the AutoRegressive model AR(q)
+designmatrix.ar <- function(X, Y, q){
+  k <- ncol(X)
+  # Let's define the new design matrix
+  Y_new <- Y[q:length(Y)]
+  matrix1 <- NULL
+  matrix2 <- NULL
+  for (i in 0:(nrow(X)-q - 1)){
+    ind1 <- sort((1+i):(i+q), decreasing = T)
+    matrix1 <- rbind(matrix1, Y[ind1])
+
+    if (dim(X)[1] != 0){
+      matrix2 <- rbind(matrix2, X[q+i+1,])
+      design <- cbind(matrix1, matrix2)
+    }
+    else{
+      design <- matrix1    }
+
+  }
+
+  return(design)
+
+}
+
+
+#' Fitting a Bayesian Nonparametric AutoRegressive model of order q - AR(q)
+#'
+#' @param Y Time series
+#' @param q Order of the AutoRegressive model AR(q)
+#' @param X Covariates of interest (by default, the function fits only the autoregressive part)
+#' @param initializer list of initial values - can be obtained as the output of the function initializer()
+#' @param iter number of iterations to consider
+#' @param burn_in number of initial sampled valued to discard
+#' @param thin thinning value
+#' @param conf_level confidence level of the credible intervals
+#' @param cluster boolean value indicating whether the cluster analysis is desired
+#' @param sigma parameter to regulate the Pitman-Yor process - default: sigma=0 (Dirichlet process case).
+#' @keywords model, ar model, ar, autoregressive model
+#' @example armodel <- bnp.ar(Y, qq, initializer, X, iter = 20000, burn_in = 5000,thin = 50, conf_level = 0.05)
+#' @export
+bnp.ar <- function(Y, q, initializer,X = matrix(0, ncol=0, nrow=0), iter = 10000, burn_in = 5000,
+                   thin = 10, conf_level = 0.05, sigma = 0, plot=F){
+  n = length(Y)
+  k = ncol(X)
+  X_design <- designmatrix.ar(X, Y, q)
+  Y_design = Y[(q+1):length(Y)]
+
+  samples <- sampler(X_design, Y_design, initializer_, iter = iter, burn_in = burn_in,
+                                    thin = thin, log_rate = T, sigma = sigma)
+  eps <- read.table("epsilon.csv", header = F, skip = 1,
+                    sep = ";")
+  m <- read.table("betas.csv", header = F, skip = 1,
+                  sep = ";")
+  tau1 <- read.table("tau1.csv", header = F, skip = 1,
+                     sep = ";")
+  tau2 <- read.table("tau2.csv", header = F, skip = 1,
+                     sep = ";")
+  mu <- read.table("mu.csv", header = F, skip = 1, sep = ";")
+  betas_estimates <- apply(m, 2, mean)
+  cred_int = bnpResiduals:::credible_intervals(m, level = conf_level)
+  d <- cbind(betas_estimates, cred_int)
+  colnames(d) <- c("Estimate", paste0(conf_level * 100/2,
+                                      "%"), paste0(100 - conf_level * 100/2, "%"))
+  if (plot){
+    x11()
+    plot(density(as.numeric(eps[dim(eps)[1], ])), type = "l",
+         col = 1, lty = 4, lwd = 2, main = "Density of the Empirical Residuals")
+  }
+
+  return(list(coef = d))
+
+}
+
+
+
+# Gaussian Process with Bayesian Nonparametrics residuals
+
+#' Fitting a Gaussian Process with the Residual Structure explicited in Ascolani, Ghidini (2021+)
+#'
+#' @param X1 first matrix for the computation of the kernel
+#' @param X2 second matrix for the computation of the kernel
+#' @param l parameter of the kernel
+#' @keywords kernel, covariance
+#'
+#'
+calcSigma <- function(X1,X2,l=1) {
+  Sigma <- matrix(rep(0, dim(X1)[1]*dim(X2)[1]), nrow=dim(X1)[1])
+  for (i in 1:nrow(Sigma)) {
+    for (j in 1:ncol(Sigma)) {
+      Sigma[i,j] <- exp(-0.5*sum(abs(X1[i,]-X2[j,])/l)^2)
+      # here you need to substitute with the appropriate k(.,.)
+    }
+  }
+  return(Sigma)
+}
+
+
+
+
+#' Fitting a Gaussian Process with the Residual Structure explicited in Ascolani, Ghidini (2021+)
+#'
+#' @param X design matrix
+#' @param Y response variable
+#' @param initializer list of initial values - can be obtained as the output of the function initializer()
+#' @param iter number of iterations to consider
+#' @param burn_in number of initial sampled valued to discard
+#' @param thin thinning value
+#' @param Xstar grid to predict
+#' @param sigma parameter to regulate the Pitman-Yor process - default: sigma=0 (Dirichlet process case).
+#' @keywords model, gaussian process, gp
+#' @export
+
+
+bnp.GP <- function(X, Y, initializer, iter, Xstar, burn_in = 0, thin = 1, Verbose=T, log_rate=T, sigma=0){
+  n <- nrow(X)
+  k <- ncol(X)
+  if (is.null(dim(Xstar))){
+    Xstar = matrix(Xstar, ncol=1)
+  }
+  # Write on file
+  null_df <- data.frame(NULL)
+
+
+  write.table(null_df, file = "mu.csv", row.names = F)
+  write.table(null_df, file = "tau1.csv", row.names = F)
+  write.table(null_df, file = "tau2.csv", row.names = F)
+  write.table(null_df, file = "weights.csv", row.names = F)
+  write.table(null_df, file = "component.csv", row.names = F)
+  write.table(null_df, file = "epsilon.csv", row.names = F)
+  if (thin<=0){
+    thin=1
+  }
+
+  # Hyperpriors
+  t=2
+  T_big=4
+
+  mu0=0 # To ensure semiconjugacy
+  sigma0=initializer$sigma0
+
+  pb <- progress_bar$new(total = iter)
+  Z <- initializer$Z
+  comp <- initializer$comp
+  p <- initializer$p
+
+  eta <- matrix(0, nrow = n, ncol=iter)
+  preds <- matrix(0, nrow = nrow(Xstar), ncol=iter)
+
+  for (j in 1:iter){
+
+    #print(j)
+
+    if (Verbose){
+      pb$tick()
+      Sys.sleep(1 /iter)}
+
+    # Gaussian Process
+    if (is.null(dim(X))){
+      X <- as.matrix(X, ncol=1)
+    }
+
+    # Calculate the covariance matrix
+    sigma_bnp <- diag(c(ifelse(comp==1, complete_matrix[,2], complete_matrix[,3])))
+
+    k.xx <- calcSigma(X,X)
+
+
+    B = solve(sigma_bnp) + solve(k.xx)
+    b = solve(sigma_bnp)%*%(Y-comp*complete_matrix[,1])
+
+    # Save eta
+    sampled_eta <- mvrnorm(1, solve(B)%*%b, solve(B))
+    eta[,j] <- sampled_eta
+
+    # Update Residuals
+    epsilon <- Y-sampled_eta
+
+    # Gamma prob
+    w <- sampler_gamma_prob(epsilon, complete_matrix[,1], complete_matrix[,2], complete_matrix[,3], log_rate = log_rate)
+
+    #Update Gamma (comp)
+    # print(dim(w))
+    comp = apply(w,1,function(x){
+      return(sample(c(1,-1), size=1, prob = x))
+    })
+
+    # Sample mu
+
+    gs <- sampler_triplet_blockedGS(Y, epsilon, comp, p, Z, mu0, sigma0)
+
+    # Labels - they identify the cluster of belonging for each observation
+    K <- gs$K
+
+    Z <- gs$Z
+    complete_matrix <- gs$complete_matrix
+
+    # Update p - stick breaking probabilities
+    p <- p_sampler(K, theta, N, sigma)
+    K_unique <- unique(K)
+
+    # Update sigma0 - thanks to semiconjugacy
+    sigma0 = sqrt(rinvgamma(n=1, t + length(K_unique)/2, T_big+0.5*sum(Z[K_unique,1]^2)))
+
+
+    # Compute empirical predictive distribution on a grid of points
+    ll <- list(component = comp,
+               weights = w, mu = complete_matrix[,1], tau1 = complete_matrix[,2], tau2=complete_matrix[,3], epsilon = epsilon)
+
+
+    # Predictions on Xstar (formulae by Rasmussen)
+
+    k.xxs <- calcSigma(X,Xstar)
+    k.xsx <- calcSigma(Xstar,X)
+    k.xsxs <- calcSigma(Xstar,Xstar)
+
+    mu.star <- k.xsx%*%solve(k.xx + sigma_bnp)%*%(Y-comp*complete_matrix[,1])
+    sigma.star <- k.xsxs - k.xsx%*%solve(k.xx + sigma_bnp)%*%k.xxs
+
+
+    preds[,j] <- mvrnorm(1, mu.star, sigma.star)
+
+
+    if (j >= burn_in & j%%thin ==0){
+      # Append to file
+      write.table(matrix(ll$component, nrow=1), "component.csv", sep = ";", col.names = !file.exists("component.csv"), append = T, row.names = F)
+      write.table(matrix(ll$weights, nrow=1), "weights.csv", sep = ";", col.names = !file.exists("weights.csv"), append = T, row.names = F)
+      write.table(matrix(ll$mu, nrow=1), "mu.csv", sep = ";", col.names = !file.exists("mu.csv"), append = T, row.names = F)
+      write.table(matrix(ll$tau1, nrow=1), "tau1.csv", sep = ";", col.names = !file.exists("tau1.csv"), append = T, row.names = F)
+      write.table(matrix(ll$tau2, nrow=1), "tau2.csv", sep = ";", col.names = !file.exists("tau2.csv"), append = T, row.names = F)
+      write.table(matrix(ll$epsilon, nrow=1), "epsilon.csv", sep = ";", col.names = !file.exists("epsilon.csv"), append = T, row.names = F)
+
+    }
+
+
+
+  }
+  return(list(preds=preds, mu.star = mu.star, sigma.star = sigma.star, Xstar = Xstar,
+              eta=eta))
+
+}
+
 
 # Diagnostic and Inference
 
@@ -416,6 +663,7 @@ bnp.lm <- function(X, Y, initializer, cluster = F, iter=10000, burn_in = 5000, t
 #' @param parameters empirical posterior distribution of the parameters of interest
 #' @param level credible level (default: level=0.05)
 #' @keywords credible intervals, diagnostic
+
 credible_intervals <- function(parameters, level = 0.05){
   if (is.null(dim(parameters))){
     parametrs = as.matrix(parameters)
@@ -453,4 +701,8 @@ model_selection <- function(X, Y, sigma2, cutoff_level = 0.75){
   selected <- index>t_cutoff
   return(X[,selected])
 }
+
+
+
+
 
