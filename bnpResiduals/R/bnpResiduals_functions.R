@@ -1,3 +1,13 @@
+#' @import progress
+#' @import VGAM
+#' @import truncnorm
+#' @import invgamma
+#' @import readr
+#' @import matrixcalc
+#' @import MASS
+#' @import matrixStats
+NULL
+
 #' Initialize the blocked Gibbs sampler algorithm
 #'
 #' This function allows you to define the initialization values for the blocked Gibbs sampler algorithm, with the quantities illustrated in Ascolani, Ghidini (2021).
