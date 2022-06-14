@@ -1,5 +1,5 @@
 # bnpResiduals
-Bayesian Non-Parametric Model for Linear Regression (work in progress!)
+Bayesian Non-Parametric Model for Regression (work in progress!)
 
 
 # Install
