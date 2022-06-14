@@ -181,9 +181,39 @@ Here we need to write things more explicitly. This may be useful if you are not 
 
 About the clusters: they can also be obtained from bnp.lm() simply setting \texttt{cluster = T}.
 
+We also put an hyperprior on $\beta_0$ and $\sigma^2$
 ```{r}
-GS_nonparametric <- function(X, Y, groups, initializer, iter, Verbose=T,
-                              log_rate=T, sigma=0, c0=1, d0=1){
+sample_posterior_beta0 <- function(beta, b0, B, B0){
+  if (is.null(dim(b0))){b0 <- matrix(b0, ncol=1)}
+  if (is.null(dim(beta))){beta <- matrix(beta, ncol=1)}
+  mean_vector <- apply(beta, 1, mean)
+  L <- ncol(beta)
+  k <- length(beta)
+  new_mean <- solve(L*solve(B) + solve(B0))%*%(L*solve(B)%*%mean_vector+solve(B0)%*%b0)
+  new_var <- solve(solve(B) + solve(B0))
+  beta0_post <- mvrnorm(1, mu= new_mean, Sigma = new_var)
+  return(beta0_post)
+}
+
+posterior_sigma2 <- function(c0, d0, X, Y, beta, groups){
+  N <- nrow(X)
+  new_shape <- c0 + N/2
+  residuals <- rep(0, N)
+  L <- length(unique(groups))
+  for (l in 1:L){
+    residuals[groups==l] <- Y[groups==l] - X[groups==l,] %*% beta[,l]
+  }
+  new_scale <- d0 + .5*sum(residuals^2)
+  sigma2_post <- rinvgamma(1, shape=new_shape, rate = new_scale)
+  return(sigma2_post)
+}
+
+
+```
+
+
+```{r}
+GS_nonparametric <- function(X, Y, groups, initializer, iter, Verbose=T, log_rate=T, sigma=0, c0=1, d0=1){
   n <- nrow(X)
   k <- ncol(X)
   # Write on file
@@ -236,14 +266,12 @@ GS_nonparametric <- function(X, Y, groups, initializer, iter, Verbose=T,
     # sample betas for each group
 
     for (l in 1:L){
-      groups==l
-
-      ss <- sampler_beta(complete_matrix[groups==l,1], complete_matrix[groups==l,2], complete_matrix[groups==l,3],
-                         comp[groups==l], Y[groups==l], X[groups==l,], B0, matrix(b0, ncol=1))
-
-      beta_post[,l] <- ss$beta
+      
+      ss <- bnpResiduals:::sampler_beta(complete_matrix[groups==l,1], complete_matrix[groups==l,2], complete_matrix[groups==l,3], comp[groups==l], Y[groups==l], X[groups==l,], B0, matrix(b0, ncol=1))
+      beta_post[,l] <- as.numeric(ss$beta)
+      
       # Update Residuals
-      epsilon[groups==l] <- Y[groups==l]-X[groups==l,]%*%beta_post[,l]
+      epsilon[groups==l]<-Y[groups==l]-X[groups==l,]%*%beta_post[,l]
       
     }
     beta0 <- sample_posterior_beta0(beta_post, b0, B, B0)
@@ -309,10 +337,7 @@ GS_nonparametric <- function(X, Y, groups, initializer, iter, Verbose=T,
 
 ```
 
-```{r}
-groups <- factor(insurance$region)
-levels(groups) <- c(1,2,3,4)
-```
+
 
 
 ```{r}
@@ -332,6 +357,17 @@ z_last <- nonparametric_result$Z[[length(nonparametric_result$Z)]]
 We estimate the clusters studying the posterior coclustering matrix, and then minimising the Variation of Information distance (Wade and Gahramani).
 
 ```{r}
+vec2mat <- function(clust_lab){
+  # in: vector clust_lab of length V s.t. clust_lab[v]=h if node v is in cluster h
+  # out: binary VxH matrix M s.t. M[v,h]=1{node v is in cluster h}
+  V <- length(clust_lab)
+  H <- max(clust_lab)
+  M <- matrix(0,V,H)
+  for (v in 1:V){
+    M[v,clust_lab[v]] <- 1
+  }
+  return(M)
+}
 # Compute the posterior coclustering matrix
 pr_cc <- function(z_post){
   # in: posterior sample of assignments (VxN_iter matrix)
