@@ -1,2 +1,20 @@
 # bnpResiduals
-Bayesian Non-Parametric Model for Linear Regression
+Bayesian Non-Parametric Model for Linear Regression (work in progress!)
+
+
+# Install
+
+To use this package, you need to download it from Github using devtools.
+
+
+'''
+install.packages("devtools")
+library(devtools)
+install_github("ValentinaGhidini/bnpResiduals",  subdir="bnpResiduals")
+'''
+
+# Usage
+
+This is a work in progress, but there are some examples of models what you can use (linear model, gaussian process, ARIMA). The application on the medical charges billed by insurance contained in Ascolani, Ghidini (2022+) can be reproduced using the files in the *Application - Insurance* folder.
+
+
