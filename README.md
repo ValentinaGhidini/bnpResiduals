@@ -7,11 +7,11 @@ Bayesian Non-Parametric Model for Linear Regression (work in progress!)
 To use this package, you need to download it from Github using devtools.
 
 
-'''
+```
 install.packages("devtools")
 library(devtools)
 install_github("ValentinaGhidini/bnpResiduals",  subdir="bnpResiduals")
-'''
+```
 
 # Usage
 
