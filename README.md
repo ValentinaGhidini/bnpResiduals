@@ -15,6 +15,6 @@ install_github("ValentinaGhidini/bnpResiduals",  subdir="bnpResiduals")
 
 # Usage
 
-This is a work in progress, but we have already included different models in the package (linear model, gaussian process, AutoRegressive model). The application on the medical charges billed by insurance contained in Ascolani, Ghidini (2022+) can be reproduced using the markdown in the *Application - Insurance* folder.
+This is a work in progress, but we have already included different models in the package (linear model, gaussian process, AutoRegressive model). The application on the medical charges billed by insurances, illustrated in Ascolani, Ghidini (2022+), can be reproduced using the markdown in the *Application - Insurance* folder.
 
 
