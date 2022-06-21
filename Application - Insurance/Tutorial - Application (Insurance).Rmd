@@ -9,17 +9,23 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r, echo = F}
+install.packages("invgamma")
+install.packages("truncnorm")
+install.packages("bnpResiduals")
+install.packages("ggplot2")
+install.packages("mcclust.ext")
+
+```
+
 ```{r}
-library(orthopolynom)
-library(MASS)
+#library(orthopolynom)
+#library(MASS)
 library(invgamma)
 library(truncnorm)
-library(invgamma)
 library(bnpResiduals)
 library(ggplot2)
-library(reshape2)
 library(mcclust.ext)
-
 library(bnpResiduals)
 ```
 
@@ -41,7 +47,7 @@ insurance$sex <- ifelse(insurance$sex == 'female', 1, 0) # 1 female, 0 male
 insurance$smoker <- ifelse(insurance$smoker == 'yes', 1, 0)
 ```
 
-Finally, let's divide X and Y
+Finally, let's set up the design matrix X and the target Y.
 
 ```{r}
 Y <- log(insurance$charges)
@@ -52,7 +58,7 @@ X <- cbind(rep(1, nrow(X)), X) # add the intercept
 
 # Initialization and hyperparameters for the Gibbs sampler model
 
-Now, let's set all the hyperparameters we need to run the model
+Now, let's set all the hyperparameters we need to run the model.
 
 ```{r}
 n <- nrow(X) # number of observations
@@ -61,13 +67,13 @@ k <- ncol(X)-1 # number of variables
 
 
 ```{r}
-b0 <-  rep(0, k+1)
+b0 <-  rep(0, k+1) # mean of the coefficients
 
-B0 <-  diag(10, k+1)
+B0 <-  diag(10, k+1) # covariance matrix of the coefficients
+
 s1 <- s2 <-  2
-
 S1 <- S2 <- 1
-sigma2=10
+sigma2=10 # variance
 theta = 1
 ```
 
@@ -82,7 +88,7 @@ comp <- ifelse(epsilon > 0, 1, -1)
 Let's set the number of components of the Blocked Gibbs sampler:
 
 ```{r}
-N = 150
+N = 150 # number of components in the blocked Gibbs sampler
 log_s = T # compute all the probabilities in log-scale
 ```
 
@@ -97,8 +103,11 @@ sigma0 <- sqrt(25)
 and let's create the object initializer, needed as input for the models:
 
 ```{r}
+# simulate the number of components of the RPM
 K <- sample(1:N, size = n, replace = T, prob = p)
+# Simulate the triplets
 Z <- cbind(rtruncnorm(N,a = 0, mean = mu0, sd = sigma0), sqrt(rinvgamma(N,shape = s1, rate = S1)), sqrt(rinvgamma(N,shape = s2, rate = S2)))
+
 temp <- bnpResiduals:::sampler_triplet_blockedGS(Y,epsilon, comp, p, Z, mu0, sigma0)
 K <- temp$K
 Z <- temp$Z
