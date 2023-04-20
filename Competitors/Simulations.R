@@ -68,7 +68,7 @@ for (i in 1:n){
   else{
     epsilon_mixture <- c(epsilon_mixture, rnorm(1, mu2, sigma2))
   }
-  
+
 }
 Y_mixture <- X%*%true_beta + epsilon_mixture
 
@@ -164,7 +164,7 @@ complete_matrix = Z[K,]
 #attach(bnpResiduals)
 initializer_ <- initializer(Z, p, comp, b0, B0, N, mu0, sigma0, complete_matrix)
 
-symmetric_model <- bnp.lm_symmetric(X, Y_mixture, initializer_, iter=5000, burn_in = 500, thin = 10, cluster = T)
+symmetric_model <- bnp.lm_symmetric(X, Y_mixture, initializer_, iter=50, burn_in = 500, thin = 10)
 
 symmetric_model$coef
 
@@ -185,7 +185,7 @@ true_beta
 #########################################
 
 source("skewT.R")
-skewt_model <- skewt_sampler(X, Y_skewT, iters=5000, sigma2_init=1, delta_init=1, w_init=rep(1,n), 
+skewt_model <- skewt_sampler(X, Y_skewT, iters=5000, sigma2_init=1, delta_init=1, w_init=rep(1,n),
                           z_init=rep(1,n), nu_init=1,
                           beta0=b0, Lambda0=B0, a0=1, b0=1, gamma2=1)
 
@@ -198,4 +198,14 @@ apply(skewt_model$beta, 1, mean)
 true_beta
 
 
+#########################################
+### MODEL 4: Our model ###
+#########################################
 
+
+library(bnpResiduals)
+
+linearModel <- bnp.lm(X, Y_mixture, initializer_, cluster=F, iter=50, burn_in = 0, thin = 0, sigma = 0)
+
+
+sampled_coefficients <- t(read.table("betas.csv", header=F, skip=1, sep=";"))
